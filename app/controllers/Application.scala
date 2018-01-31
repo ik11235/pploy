@@ -3,6 +3,7 @@ package controllers
 import java.io.File
 
 import models._
+import play.api.Logger
 import play.api.Play.current
 import play.api.data.Form
 import play.api.data.Forms._
@@ -26,6 +27,8 @@ object Application extends Controller {
   val createProjectForm = Form("url" -> text)
 
   def index() = Action { implicit request =>
+    Logger.info(s"[index]")
+
     Ok(views.html.index())
   }
 

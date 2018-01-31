@@ -1,5 +1,6 @@
 package models
 
+import play.api.Logger
 import play.api.libs.iteratee.Enumerator
 
 import scala.concurrent.ExecutionContext
@@ -10,9 +11,11 @@ object ProcessEnumerator {
   // and executes the process in Future
   // so that the process' output can be streamed
   def apply(process: ProcessBuilder)(
-    implicit
-    executionContext: ExecutionContext
+      implicit
+      executionContext: ExecutionContext
   ): Enumerator[String] = {
+    Logger.info(s"[Process]: $process , $executionContext")
+
     Enumerator.enumerate[String](
       process.lineStream_!(ProcessLogger(line => ())).map { line =>
         line + "\n"
