@@ -9,10 +9,14 @@ import play.api.data.Forms._
 import play.api.i18n.Messages.Implicits._
 import play.api.libs.iteratee.Iteratee
 import play.api.mvc._
+import play.libs.Akka
 
 import scala.io.Source
 
 object Application extends Controller {
+  private val deployExecutionContext =
+    Akka.system.dispatchers.lookup("play.akka.actor.deploy-script-dispatcher")
+
   def getCurrentUser(request: RequestHeader) = {
     request.cookies.get("user").map {
       cookie => User(cookie.value)
@@ -79,8 +83,13 @@ object Application extends Controller {
     checkoutForm.bindFromRequest.fold(
       errors => BadRequest,
       ref => {
-        Ok.chunked(ProcessEnumerator(proj.checkoutProcess(ref)))
-          .withHeaders("Content-Type" -> "text/plain; charset=utf-8", "X-Content-Type-Options" -> "nosniff")
+        Ok.chunked(ProcessEnumerator(proj.checkoutProcess(ref))(
+          deployExecutionContext
+        ))
+          .withHeaders(
+            "Content-Type" -> "text/plain; charset=utf-8",
+            "X-Content-Type-Options" -> "nosniff"
+          )
       }
     )
   }
@@ -90,9 +99,10 @@ object Application extends Controller {
     val user = getCurrentUser(request)
       .getOrElse(throw new RuntimeException("user not selected"))
 
-    val in = Iteratee.ignore[String]
-    val out = ProcessEnumerator(proj.checkoutProcess(ref))
-    (in, out)
+      val in = Iteratee.ignore[String]
+      val out =
+        ProcessEnumerator(proj.checkoutProcess(ref))(deployExecutionContext)
+      (in, out)
   }
 
   val deployForm = Form("target" -> text)
@@ -106,20 +116,28 @@ object Application extends Controller {
     deployForm.bindFromRequest.fold(
       errors => BadRequest,
       target => {
-        Ok.chunked(ProcessEnumerator(proj.deployProcess(user, target)))
-          .withHeaders("Content-Type" -> "text/plain; charset=utf-8", "X-Content-Type-Options" -> "nosniff")
+        Ok.chunked(ProcessEnumerator(proj.deployProcess(user, target))(
+          deployExecutionContext
+        ))
+          .withHeaders(
+            "Content-Type" -> "text/plain; charset=utf-8",
+            "X-Content-Type-Options" -> "nosniff"
+          )
       }
     )
   }
 
-  def deployWS(project: String, target: String) = WebSocket.using[String] { request =>
-    val proj = Project(project)
-    val user = getCurrentUser(request)
-      .getOrElse(throw new RuntimeException("user not selected"))
+  def deployWS(project: String, target: String) = WebSocket.using[String] {
+    request =>
+      val proj = Project(project)
+      val user = getCurrentUser(request)
+        .getOrElse(throw new RuntimeException("user not selected"))
 
-    val in = Iteratee.ignore[String]
-    val out = ProcessEnumerator(proj.deployProcess(user, target))
-    (in, out)
+      val in = Iteratee.ignore[String]
+      val out = ProcessEnumerator(proj.deployProcess(user, target))(
+        deployExecutionContext
+      )
+      (in, out)
   }
 
   def commits(project: String) = Action { implicit request =>
