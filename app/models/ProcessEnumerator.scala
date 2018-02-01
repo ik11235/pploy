@@ -18,6 +18,8 @@ object ProcessEnumerator {
 
     Enumerator.enumerate[String](
       process.lineStream_!(ProcessLogger(line => ())).map { line =>
+        Logger.info(s"[line]: $line")
+
         line + "\n"
       }
     )(executionContext)
